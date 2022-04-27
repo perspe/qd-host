@@ -1,3 +1,7 @@
 Article_*_Results
 *__pycache__*
 *schrodinger*
+*.ipynb_checkpoints*
+*PSO_Results*
+*.ipynb
+*.log
