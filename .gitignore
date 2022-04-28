@@ -5,3 +5,4 @@ Article_*_Results
 *PSO_Results*
 *.ipynb
 *.log
+*.svg
