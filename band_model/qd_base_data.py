@@ -75,6 +75,11 @@ def spherical_bound_states(energy, m1, m2, a, V0, ang_mom):
             1j * (spherical_hankel(ang_mom - 1, energy_h, 1) /
                   spherical_hankel(ang_mom, energy_h, 1)))
         f_E = np.add(j_term, -h_term)
+    # if export:
+    #     export_data = np.c_[energy, f_E]
+    #     np.savetxt(
+    #         f"bound_states_l{ang_mom}_({m1:.2f}_{m2:.2f}_{a:.2f}_{V0:.2f}).txt",
+    #         export_data)
     return f_E
 
 
@@ -161,6 +166,8 @@ class qd_results():
             l_ind += 1
         self.e_levels = pd.DataFrame.from_dict(zeros,
                                                orient='index').transpose()
+        # Filter all values bellow 0.01
+        self.e_levels[self.e_levels > -0.07] = np.nan
 
     def norm_constants(self):
         """Calculate the k_in,  k_out and normalization constants

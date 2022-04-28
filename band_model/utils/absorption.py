@@ -1,3 +1,12 @@
+""" General tools to determine absorption properties of the QD@Host
+system
+This module has:
+    absorption_ij, interband_absorption (Calculate inter and intraband
+                                    absorptions)
+    opt_function: Optimization method that uses the pso algorithm
+    bruggerman_dispersion: Determine the bruggerman_dispersion between 2
+                            materials
+"""
 import numpy as np
 import math
 from itertools import product
@@ -9,6 +18,8 @@ import scipy.constants as scc
 import multiprocessing
 from multiprocessing import Pool
 from functools import partial
+
+""" Functions to determine absorption coefficients (inter and intraband) """
 
 
 def absorption_ij(energy,
@@ -124,6 +135,7 @@ def interband_transition_elements(qd1, qd2, sim_properties, count=10000):
     """
     Calculates all the interband transition elements between qd1 and qd2
         sim_properties: (sim_size, lat_size, Eg, (Pl, Pt))
+        count (int): Number of transitions to calculate
     Returns:
         transition_list (list): List with the transition elements
                                 (Transition energy, (Mx, My, Mz))
@@ -279,8 +291,11 @@ def interband_absorption(e_array,
         n_index (float/array): Array with the refractive index values
         peak_dispersion (float): Dispersion of the absorption peal
     Returns:
-        absorption_per_density (nm3/cm): final total absorption coefficient per density
-        absorption_per_peak: array with absorption coefficient for each peak
+        absorption (DataFrame) with:
+            absorption_per_density (nm3/cm): final total absorption
+                                             coefficient per density
+            absorption_per_peak: array with absorption coefficient
+                                 for each peak
     
     """
     # Initialize necessary constants
@@ -311,6 +326,9 @@ def interband_absorption(e_array,
         # Absorption (the 1e7 term moves the units to nm3cm-1)
         results["Total"] += delta_peak
     return results
+
+
+""" Functions for FoM and optimization function for the pso algorithm """
 
 
 def _single_FoM(qd_size_i,
@@ -372,29 +390,30 @@ def opt_function(qd_size,
     return res
 
 
-def mc_random(qd_size,
-              me,
-              mh,
-              Pl,
-              Pt,
-              Eg,
-              offset,
-              tol=0.1,
-              n_rnd=500,
-              **kwargs):
-    """ Calculate n_rnd simulation tol% around the given values """
-    logging.info(f"Random MC...{tol=} {n_rnd=}")
-    me_rnd = np.random.uniform((1 - tol) * me, (1 + tol) * me, size=(n_rnd))
-    mh_rnd = np.random.uniform((1 - tol) * mh, (1 + tol) * mh, size=(n_rnd))
-    qd_size_rnd = np.random.uniform((1 - tol) * qd_size, (1 + tol) * qd_size,
-                                    size=(n_rnd))
-    Pl_rnd = np.random.uniform((1 - tol) * Pl, (1 + tol) * Pl, size=(n_rnd))
-    Pt_rnd = np.random.uniform((1 - tol) * Pt, (1 + tol) * Pt, size=(n_rnd))
-    Eg_rnd = np.random.uniform((1 - tol) * Eg, (1 + tol) * Eg, size=(n_rnd))
-    offset_rnd = np.random.uniform((1 - tol) * offset, (1 + tol) * offset,
-                                   size=(n_rnd))
+""" Bruggerman equation to determine the combined refractive index """
 
-    # Run all the random iterations
-    mc_res = opt_function(qd_size_rnd, me_rnd, mh_rnd, Pl_rnd, Pt_rnd, Eg_rnd,
-                          offset_rnd, **kwargs)
-    return mc_res
+
+def _bruggerman(n_eff, n_qd: complex, n_pvk: complex, p_qd: float):
+    """ Bruggerman equation:
+    n_eff is similar to x in a function
+    The point where the returned y=0 is the n_eff value
+    """
+    y = p_qd * (n_qd - n_eff) / (n_qd + 2 * n_eff) + (1 - p_qd) * (
+        n_pvk - n_eff) / (n_pvk + 2 * n_eff)
+    return y
+
+
+def bruggerman_dispersion(n1, n2, p):
+    """
+    Calculate the effective medium dispersion between two materials 1 and 2
+    Args:
+        n1, n2 (complex arrays): refractive indices for each material
+        p (float): fraction
+    Returns:
+        n_eff (complex array): effective medium
+    """
+    n_eff = np.ones_like(n1, dtype=np.complex128)
+    for (index, n1_i), n2_i in zip(enumerate(n1), n2):
+        n_eff[index] = sco.newton(bruggerman, (n1_i + n2_i) / 2,
+                                  args=(n1_i, n2_i, p))
+    return n_eff
