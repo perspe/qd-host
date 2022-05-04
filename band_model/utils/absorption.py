@@ -15,10 +15,10 @@ from .. import qd_base_data as qbd
 import pandas as pd
 import scipy.integrate as sci
 import scipy.constants as scc
+import scipy.optimize as sco
 import multiprocessing
 from multiprocessing import Pool
 from functools import partial
-
 """ Functions to determine absorption coefficients (inter and intraband) """
 
 
@@ -250,6 +250,7 @@ def all_avg_trn_elements(qd1_prop, qd2_prop, sim_properties):
     bi = ["VB1", "VB2"]
     bf = ["CB1", "CB2"]
     band_elements = []
+    transition = []
     # Create a list with the transition elements for each band transition
     for b_i, b_f in product(bi, bf):
         logging.debug(f"{b_i=} {b_f=}")
@@ -331,6 +332,35 @@ def interband_absorption(e_array,
 """ Functions for FoM and optimization function for the pso algorithm """
 
 
+def FoM_int_size_nlevels(qd_size_i,
+                         Vcb_i,
+                         Vvb_i,
+                         me_i,
+                         mh_i,
+                         Pl_i,
+                         Pt_i,
+                         Eg_i,
+                         offset_i,
+                         energy=np.linspace(2, 3, 200),
+                         lat_size=0.8,
+                         sim_size=25):
+    """ Calculate the FoM for a single combination of parameters """
+    sim_properties = (sim_size, lat_size, Eg_i, (Pl_i, Pt_i))
+    # Assuming the energy variation
+    logging.info(
+        f"Single FoM:{qd_size_i=:.2f}  {me_i=:.2f}  {mh_i=:.2f}  {Pl_i=:.2g}" +
+        f"  {Pt_i=:.2g}  {Eg_i=:.2f}  {offset_i=:.2f}" +
+        f"  {Vcb_i=:.2f}  {Vvb_i=:.2f}")
+    data = interband_absorption(energy, (qd_size_i, Vcb_i, me_i, me_i),
+                                (qd_size_i, Vvb_i, mh_i, mh_i), sim_properties)
+    # The 1e2 serves to convert the wavelength from m to cm
+    FoM = -sci.simpson(data["Total"],
+                       (scc.h * scc.c) / (data["Energy"] * scc.e) * 1e2)
+    Nlevels = data.shape[1] - 2
+    logging.debug(f"FoM={FoM/(qd_size_i**3 * Nlevels)}")
+    return FoM / ( Nlevels)
+
+
 def _single_FoM(qd_size_i,
                 Vcb_i,
                 Vvb_i,
@@ -356,6 +386,38 @@ def _single_FoM(qd_size_i,
     FoM = -sci.simpson(data["Total"],
                        (scc.h * scc.c) / (data["Energy"] * scc.e) * 1e2)
     return FoM / qd_size_i**3
+
+
+def opt_function_general(func,
+                         qd_size,
+                         me,
+                         mh,
+                         Pl,
+                         Pt,
+                         Eg,
+                         offset,
+                         energy=np.linspace(2, 3, 200),
+                         lat_size=0.8,
+                         sim_size=25):
+    """
+    Generic representation of the optimization function
+    Args:
+        func: used to optimize (defined similar to _single_FoM
+        qd_properties: (qd_size, me, m, Pl, Pt, Eg, offset)
+        sim_args: (energy, lat_size, sim_size) passed to func
+    """
+    logging.info("Running Optimization Function....")
+    Vcb = (Eg - 0.4) * offset
+    Vvb = (Eg - 0.4) - Vcb
+    # Create a partial funcion with some parameters constant
+    __func = partial(func, energy=energy, lat_size=lat_size, sim_size=sim_size)
+    with Pool(multiprocessing.cpu_count() - 2) as p:
+        res = p.starmap(__func,
+                        zip(qd_size, Vcb, Vvb, me, mh, Pl, Pt, Eg, offset))
+    # Convert the NaN to 0 (as we want to maximize the results)
+    res = np.array(res)
+    res[np.isnan(res)] = 0
+    return res
 
 
 def opt_function(qd_size,
@@ -414,6 +476,6 @@ def bruggerman_dispersion(n1, n2, p):
     """
     n_eff = np.ones_like(n1, dtype=np.complex128)
     for (index, n1_i), n2_i in zip(enumerate(n1), n2):
-        n_eff[index] = sco.newton(bruggerman, (n1_i + n2_i) / 2,
+        n_eff[index] = sco.newton(_bruggerman, (n1_i + n2_i) / 2,
                                   args=(n1_i, n2_i, p))
     return n_eff
