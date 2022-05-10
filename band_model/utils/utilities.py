@@ -34,7 +34,8 @@ def mc_random(qd_size,
     Eg_rnd = np.random.uniform((1 - tol) * Eg, (1 + tol) * Eg, size=(n_rnd))
     offset_rnd = np.random.uniform((1 - tol) * offset, (1 + tol) * offset,
                                    size=(n_rnd))
-    logging.debug(me_rnd, mh_rnd, qd_size_rnd, Pl_rnd, Pt_rnd, Eg_rnd, offset_rnd)
+    logging.debug(me_rnd, mh_rnd, qd_size_rnd, Pl_rnd, Pt_rnd, Eg_rnd,
+                  offset_rnd)
 
     # Run all the random iterations
     mc_res = ab.opt_function(qd_size_rnd, me_rnd, mh_rnd, Pl_rnd, Pt_rnd,
@@ -106,13 +107,12 @@ def pso_best_abs(it_name,
     qd1_prop = (qsize, (Eg - 0.4) * offset, me, me)
     qd2_prop = (qsize, (Eg - 0.4) * (1 - offset), mh, mh)
     # Calculate the best properties
-    trn = ab.all_avg_trn_elements(qd1_prop, qd2_prop, sim_setup)
     best_abs = ab.interband_absorption(energy, qd1_prop, qd2_prop, sim_setup)
     logging.info(best_abs)
     # Plot the best optimization absorption profile
     best_abs.plot("Energy")
-    plt.xlabel("Absorption Coefficient")
-    plt.ylabel("Energy (eV)")
+    plt.xlabel("Energy (eV)")
+    plt.ylabel("Absorption coefficient")
     plt.tick_params(axis='both')
     for index, (name, value) in enumerate(zip(columns, data.loc[0])):
         if index > 7:
@@ -191,8 +191,6 @@ def pso_it_energy_profile(ax,
     ]
     data = pd.read_csv(it_name, sep=" ", names=columns)
     ordered_data = data.apply(tuple, axis=1).values.reshape(ax.shape)
-    # Normalized x to organize the standar information
-    x = np.linspace(0, 1, 50)
     for i, line in enumerate(ordered_data):
         for j, column in enumerate(line):
             Vcb = (column[5] - 0.4) * column[6]
@@ -243,7 +241,12 @@ def pso_it_energy_profile(ax,
         plt.savefig(savename, transparent=True)
 
 
-def pso_summary(results_folder, columns, iterations, export=False, **plot_kwargs):
+def pso_summary(results_folder,
+                columns,
+                iterations,
+                n_particles,
+                export=False,
+                **plot_kwargs):
     """ Make a summary of all the optimization results.
     Args:
         results folder: folder where the results where stored
@@ -265,65 +268,90 @@ def pso_summary(results_folder, columns, iterations, export=False, **plot_kwargs
     # Import data into a pandas DF
     import_data = []
     for i in range(iterations):
-        import_data.append(pd.read_csv(f"{results_folder}/results_{i}", sep=" ", names=columns))
+        import_data.append(
+            pd.read_csv(f"{results_folder}/results_{i}",
+                        sep=" ",
+                        names=columns))
     data = pd.concat(import_data, keys=list(range(iterations)))
-    n_params = int((len(columns) - 1)/2)
+    n_params = int((len(columns) - 1) / 2)
     colors = cm.get_cmap("jet", lut=n_params)
     # Plot the histograms
-    fig, ax = plt.subplots(1, n_params, **plot_kwargs)
+    _, ax = plt.subplots(1, n_params, **plot_kwargs)
     plt.subplots_adjust(wspace=0.2, left=0.05, right=0.95)
     # Plot the histograms
     for index, variable in enumerate(columns[:n_params]):
-        chart = sns.histplot(data=data,y=variable,color=colors(index), kde=True, bins=50, ax=ax[index])
+        sns.histplot(data=data,
+                     y=variable,
+                     color=colors(index),
+                     kde=True,
+                     bins=50,
+                     ax=ax[index])
         ax[index].tick_params(axis="y", rotation=90)
         ax[index].set_ylabel("")
         ax[index].set_title(variable)
     ax[0].set_ylabel("Variable")
     if export:
-        plt.savefig(f"{results_folder}/pso_property_hist.svg", transparent=True)
+        plt.savefig(f"{results_folder}/pso_property_hist.svg",
+                    transparent=True)
 
     # Plot values per iteration
-    fig, ax = plt.subplots(1, n_params, **plot_kwargs)
+    _, ax = plt.subplots(1, n_params, **plot_kwargs)
     plt.subplots_adjust(wspace=0.2, left=0.05, right=0.95)
     # Plot the histograms
     for index, variable in enumerate(columns[:n_params]):
         for it in range(iterations):
-            ax[index].scatter(np.zeros(15) + it, data.loc[it, variable], color=colors(index), s=3)
+            ax[index].scatter(np.zeros(n_particles) + it,
+                              data.loc[it, variable],
+                              color=colors(index),
+                              s=3)
         ax[index].tick_params(axis="y", rotation=90)
         ax[index].set_ylabel("")
         ax[index].set_title(variable)
     ax[0].set_ylabel("Variable")
     if export:
-        plt.savefig(f"{results_folder}/pso_property_iter.svg", transparent=True)
+        plt.savefig(f"{results_folder}/pso_property_iter.svg",
+                    transparent=True)
 
     # Plot the FoM for the various iterations
-    fig, ax = plt.subplots(1, 1)
+    _, ax = plt.subplots(1, 1)
     for it in range(iterations):
-        ax.scatter(np.zeros(15) + it, data.loc[it, "FoM"], color=colors(index), s=3)
+        ax.scatter(np.zeros(n_particles) + it,
+                   data.loc[it, "FoM"],
+                   s=3)
     ax.set_ylabel("FoM")
     ax.set_xlabel("Iteration")
     if export:
         plt.savefig(f"{results_folder}/pso_FoM.svg", transparent=True)
 
     # Plot for the velocities
-    fig, ax = plt.subplots(1, n_params, **plot_kwargs)
+    _, ax = plt.subplots(1, n_params, **plot_kwargs)
     for index, variable in enumerate(columns[8:]):
-        chart = sns.histplot(data=data,y=variable,color=colors(index), kde=True, bins=50, ax=ax[index])
+        _ = sns.histplot(data=data,
+                         y=variable,
+                         color=colors(index),
+                         kde=True,
+                         bins=50,
+                         ax=ax[index])
         ax[index].tick_params(axis="y", rotation=90)
         ax[index].set_ylabel("")
         ax[index].set_title(variable)
     ax[0].set_ylabel("Variable")
     if export:
-        plt.savefig(f"{results_folder}/pso_property_vhist.svg", transparent=True)
+        plt.savefig(f"{results_folder}/pso_property_vhist.svg",
+                    transparent=True)
 
-    fig, ax = plt.subplots(1, n_params, **plot_kwargs)
+    _, ax = plt.subplots(1, n_params, **plot_kwargs)
     plt.subplots_adjust(wspace=0.2, left=0.05, right=0.95)
-    for index, variable in enumerate(columns[n_params+1:]):
+    for index, variable in enumerate(columns[n_params + 1:]):
         for it in range(iterations):
-            ax[index].scatter(np.zeros(15) + it, data.loc[it, variable], color=colors(index), s=3)
+            ax[index].scatter(np.zeros(n_particles) + it,
+                              data.loc[it, variable],
+                              color=colors(index),
+                              s=3)
         ax[index].tick_params(axis="y", rotation=90)
         ax[index].set_ylabel("")
         ax[index].set_title(variable)
     ax[0].set_ylabel("Variable")
     if export:
-        plt.savefig(f"{results_folder}/pso_property_viter.svg", transparent=True)
+        plt.savefig(f"{results_folder}/pso_property_viter.svg",
+                    transparent=True)
