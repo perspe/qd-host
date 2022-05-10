@@ -1,5 +1,6 @@
 Article_*_Results
 *__pycache__*
+*.cache*
 *schrodinger*
 *.ipynb_checkpoints*
 *PSO_Results*
