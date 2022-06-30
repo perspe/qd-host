@@ -1,9 +1,14 @@
+# Dirs
 Article_*_Results
 *__pycache__*
 *.cache*
 *schrodinger*
 *.ipynb_checkpoints*
 *PSO_Results*
+
+# Files
 *.ipynb
 *.log
 *.svg
+*.csv
+*.png
