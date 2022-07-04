@@ -3,10 +3,10 @@ Implementation of the particle swarm optimization algorithm
 Functions:
     - particle_swarm: Implements the algorithm
 """
+import logging
 import os
 from random import random
 
-import logging
 import numpy as np
 
 
@@ -45,14 +45,16 @@ def _update_parameters(param, vel, max_param, min_param, inertia_w, ind_cog,
     mask_min = param_new < min_param
     mask_max = param_new > max_param
     param_new[mask_min] = min_param[mask_min]
+    v_new[mask_min] = -v_new[mask_min]
     param_new[mask_max] = max_param[mask_max]
+    v_new[mask_max] = -v_new[mask_max]
     return param_new, v_new
 
 
 def particle_swarm(func,
                    param_dict,
                    maximize=True,
-                   swarm_properties=(0.75, 1.49, 1.49),
+                   swarm_properties=(0.729, 2.05, 2.05),
                    n_particles=25,
                    n_iter=50,
                    export=False,
@@ -67,7 +69,7 @@ def particle_swarm(func,
         - n_particles: Number of particles (default: 25)
         - n_iter: Maximum number of iterations (default: 50)
         - export: Export files with the parameter variation with iterations
-        - **func_kwargs: Add other constant args to the function
+        - func_kwargs: Extra arguments to pass to the function
     Return:
         - gfitness: Best value obtained
         - gbest: Best parameters
@@ -83,8 +85,8 @@ def particle_swarm(func,
     # Random array with the start value for the velocities
     # pbest and gbest arrays
     param_names = list(param_dict.keys())
-    param_max = np.array(list([p_max[1] for p_max in param_dict.values()]))
-    param_min = np.array(list([p_min[0] for p_min in param_dict.values()]))
+    param_max = np.array([p_max[1] for p_max in param_dict.values()])
+    param_min = np.array([p_min[0] for p_min in param_dict.values()])
     param_space = [
         np.random.uniform(param_dict[param][0],
                           param_dict[param][1],
@@ -92,8 +94,8 @@ def particle_swarm(func,
     ]
     param_space = np.stack(param_space)
     vel_space = [
-        np.random.uniform(param_dict[param][0],
-                          param_dict[param][1],
+        np.random.uniform(-max(param_dict[param]),
+                          max(param_dict[param]),
                           size=(n_particles)) for param in param_names
     ]
     vel_space = np.stack(vel_space)
@@ -103,8 +105,7 @@ def particle_swarm(func,
         param_name: param_space[i]
         for i, param_name in enumerate(param_names)
     }
-    func_input.update(**func_kwargs)
-    func_results = func(**func_input)
+    func_results = func(**func_input, **func_kwargs)
     if maximize:
         fitness_arg = np.argmax(func_results)
     else:
@@ -123,7 +124,6 @@ def particle_swarm(func,
         np.savetxt(f"PSO_Results/results_{iteration}", export_param)
         iteration += 1
     while iteration < n_iter:
-        logging.info(f"Running PSO: {iteration = }")
         param_space, vel_space = _update_parameters(
             param_space, vel_space, param_max, param_min, swarm_properties[0],
             swarm_properties[1], swarm_properties[2], pbest, gbest[:,
@@ -133,20 +133,23 @@ def particle_swarm(func,
             param_name: param_space[i]
             for i, param_name in enumerate(param_names)
         }
-        func_results = func(**func_input)
+        func_results = func(**func_input, **func_kwargs)
         if maximize:
-            fitness_candidate_ind = np.nanargmax(func_results)
+            fitness_candidate_ind = np.argmax(func_results)
             if func_results[fitness_candidate_ind] > gfitness:
                 gfitness = func_results[fitness_candidate_ind]
             pfitness_mask = func_results > pfitness
         else:
-            fitness_candidate_ind = np.nanargmin(func_results)
+            fitness_candidate_ind = np.argmin(func_results)
             if func_results[fitness_candidate_ind] < gfitness:
                 gfitness = func_results[fitness_candidate_ind]
             pfitness_mask = func_results < pfitness
         # Update gbest, pfitness and pbest
         gbest = param_space[:, fitness_candidate_ind].flatten()
+        logging.debug(param_space)
+        logging.debug(gbest)
         gbest_array.append(gfitness)
+        # Update the FoM plot
         pfitness[pfitness_mask] = func_results[pfitness_mask]
         pbest[:, pfitness_mask] = param_space[:, pfitness_mask]
         if export:
@@ -166,13 +169,13 @@ if __name__ == "__main__":
         return -np.exp(-x**2) * np.exp(-y**2)
 
     def test_func_2(x, y):
-        return np.sin(x)*np.sin(y)/(x*y)
+        return np.sin(x) * np.sin(y) / (x * y)
 
     fit, gbest, pbest, _ = particle_swarm(test_func_2, {
         "x": [-5, 5],
         "y": [-5, 5]
     },
-                                       maximize=True,
-                                       export=True)
+                                          maximize=True,
+                                          export=False)
     print("----Results-----")
     print(fit, gbest, pbest, sep="\n")
