@@ -19,7 +19,7 @@ import scipy.optimize as sco
 import multiprocessing
 from multiprocessing import Pool
 from functools import partial
-""" Functions to determine absorption coefficients (inter and intraband) """
+""" FuncTions to determine absorption coefficients (inter and intraband) """
 
 
 def absorption_ij(energy,
@@ -332,6 +332,52 @@ def interband_absorption(e_array,
 """ Functions for FoM and optimization function for the pso algorithm """
 
 
+def FoM_similatiry_size(qd_size_i,
+                        Vcb_i,
+                        Vvb_i,
+                        me_i,
+                        mh_i,
+                        Pl_i,
+                        Pt_i,
+                        Eg_i,
+                        offset_i,
+                        energy=np.linspace(2, 3, 200),
+                        lat_size=0.8,
+                        sim_size=25):
+    """
+    Calculate the FoM for a single combination of parameters
+    This FoM Considers:
+        - Number of energy levels (smaller the better)
+        - Energy Level close to 0.9 in the CB
+        - Smaller QD size
+        - Better Absorption
+    """
+    """ Calculate the FoM for a single combination of parameters """
+    sim_properties = (sim_size, lat_size, Eg_i, (Pl_i, Pt_i))
+    # Assuming the energy variation
+    logging.info(
+        f"Single FoM:{qd_size_i=:.2f}  {me_i=:.2f}  {mh_i=:.2f}  {Pl_i=:.2g}" +
+        f"  {Pt_i=:.2g}  {Eg_i=:.2f}  {offset_i=:.2f}" +
+        f"  {Vcb_i=:.2f}  {Vvb_i=:.2f}")
+    # Calculate the energy level distance
+    qd_data = qbd.qd_results(qd_size_i, Vcb_i, me_i, me_i, "CB1")
+    ideal_ib = -0.9
+    levels_ib = qd_data.e_levels.values - ideal_ib
+    if levels_ib.size == 0:
+        similarity = np.nan 
+    else:
+        similarity = np.abs(np.nanmin(levels_ib))
+    data = interband_absorption(energy, (qd_size_i, Vcb_i, me_i, me_i),
+                                (qd_size_i, Vvb_i, mh_i, mh_i), sim_properties)
+    # The 1e2 serves to convert the wavelength from m to cm
+    FoM = -sci.simpson(data["Total"],
+                       (scc.h * scc.c) / (data["Energy"] * scc.e) * 1e2)
+    Nlevels = data.shape[1] - 2
+    res = FoM / (qd_size_i**3 * np.sqrt(Nlevels) * similarity)
+    logging.debug(f"{FoM=}::{qd_size_i=}::{similarity=}\n{res=}")
+    return res
+
+
 def FoM_int_size_nlevels(qd_size_i,
                          Vcb_i,
                          Vvb_i,
@@ -358,7 +404,7 @@ def FoM_int_size_nlevels(qd_size_i,
                        (scc.h * scc.c) / (data["Energy"] * scc.e) * 1e2)
     Nlevels = data.shape[1] - 2
     logging.debug(f"FoM={FoM/(qd_size_i**3 * Nlevels)}")
-    return FoM / ( Nlevels)
+    return FoM / (Nlevels)
 
 
 def _single_FoM(qd_size_i,
