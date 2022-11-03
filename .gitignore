@@ -5,9 +5,10 @@ Article_*_Results
 *schrodinger*
 *.ipynb_checkpoints*
 *PSO_Results*
+Old_ipynb
+*build*
 
 # Files
-*.ipynb
 *.log
 *.svg
 *.csv
