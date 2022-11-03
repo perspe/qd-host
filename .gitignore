@@ -13,3 +13,7 @@ Old_ipynb
 *.svg
 *.csv
 *.png
+
+# Build files
+*zeros_calc.c
+*py_smm_base.cpp
