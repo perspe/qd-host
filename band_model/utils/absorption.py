@@ -331,6 +331,45 @@ def interband_absorption(e_array,
 
 """ Functions for FoM and optimization function for the pso algorithm """
 
+def opt_data(qd_size_i,
+             Vcb_i,
+             Vvb_i,
+             me_i,
+             mh_i,
+             Pl_i,
+             Pt_i,
+             Eg_i,
+             offset_i,
+             energy=np.linspace(2, 3, 200),
+             lat_size=0.8,
+             sim_size=25):
+    """
+    Determine the basic information used for the calculation of the FoM
+    """
+    # Assuming the energy variation
+    logging.info(
+        f"Single FoM:{qd_size_i=:.2f}  {me_i=:.2f}  {mh_i=:.2f}  {Pl_i=:.2g}" +
+        f"  {Pt_i=:.2g}  {Eg_i=:.2f}  {offset_i=:.2f}" +
+        f"  {Vcb_i=:.2f}  {Vvb_i=:.2f}")
+    # Calculate the energy level distance
+    qd_data = qbd.qd_results(qd_size_i, Vcb_i, me_i, me_i, "CB1")
+    ideal_ib = -0.9
+    # Calculate normalized value (by ideal_ib)
+    levels_ib = np.abs((qd_data.e_levels.values - ideal_ib)/ideal_ib)
+    if levels_ib.size == 0:
+        similarity = np.nan 
+    else:
+        similarity = np.nanmin(levels_ib)
+    sim_properties = (sim_size, lat_size, Eg_i, (Pl_i, Pt_i))
+    data = interband_absorption(energy, (qd_size_i, Vcb_i, me_i, me_i),
+                                (qd_size_i, Vvb_i, mh_i, mh_i), sim_properties)
+    Ntrn = data.shape[1] - 2
+    # The 1e2 converts the wavelength from m to cm
+    int_abs = -sci.simpson(data["Total"],
+                       (scc.h * scc.c) / (data["Energy"] * scc.e) * 1e2)
+    logging.info(f"{int_abs=}::{qd_size_i=}::{similarity=}")
+    return int_abs, similarity, Ntrn
+
 
 def FoM_similatiry_size(qd_size_i,
                         Vcb_i,
@@ -373,7 +412,7 @@ def FoM_similatiry_size(qd_size_i,
     FoM = -sci.simpson(data["Total"],
                        (scc.h * scc.c) / (data["Energy"] * scc.e) * 1e2)
     Nlevels = data.shape[1] - 2
-    res = FoM / (qd_size_i**3 * np.sqrt(Nlevels) * similarity)
+    res = np.cbrt(FoM) / (qd_size_i * Nlevels * similarity)
     logging.debug(f"{FoM=}::{qd_size_i=}::{similarity=}\n{res=}")
     return res
 
