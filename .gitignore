@@ -18,3 +18,4 @@ Old_ipynb
 *zeros_calc.c
 *py_smm_base.cpp
 *.so
+*.pyd
